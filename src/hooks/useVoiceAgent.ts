@@ -24,7 +24,7 @@ interface SessionResponse {
   };
 }
 
-const AGENT_ID = "69244b9776cf042850e3821e";
+const AGENT_ID = "69393bdd1f3e985c1e3667b6";
 const API_BASE_URL = "https://voice-sip.voice.lyzr.app";
 
 export interface TranscriptMessage {
