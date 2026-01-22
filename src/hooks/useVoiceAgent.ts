@@ -5,6 +5,7 @@ import {
   encodeAudioForAPI,
   decodeBase64Audio,
 } from "@/utils/audioUtils";
+import { AGENT_ID, API_BASE_URL } from "@/CONSTS";
 
 export type ConnectionStatus =
   | "idle"
@@ -24,9 +25,6 @@ interface SessionResponse {
   };
 }
 
-const AGENT_ID = "69393bdd1f3e985c1e3667b6";
-const API_BASE_URL = "https://voice-sip.voice.lyzr.app";
-
 export interface TranscriptMessage {
   role: "user" | "agent";
   text: string;
@@ -42,6 +40,11 @@ export const useVoiceAgent = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
+  const backToListeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  const SPEAKING_IDLE_DEBOUNCE_MS = 900;
 
   const startSession = useCallback(async () => {
     try {
@@ -105,13 +108,18 @@ export const useVoiceAgent = () => {
             setStatus("speaking");
             const audioData = decodeBase64Audio(message.audio);
             playerRef.current?.addToQueue(audioData);
-            
-            // Reset to connected after a short delay
-            setTimeout(() => {
+
+            // Debounce: only flip back after no audio arrived for a bit
+            if (backToListeningTimeoutRef.current) {
+              clearTimeout(backToListeningTimeoutRef.current);
+            }
+
+            backToListeningTimeoutRef.current = setTimeout(() => {
               setStatus((current) =>
                 current === "speaking" ? "connected" : current
               );
-            }, 500);
+              backToListeningTimeoutRef.current = null;
+            }, SPEAKING_IDLE_DEBOUNCE_MS);
           }
 
           // Handle transcript messages - check for role field or message type
@@ -120,18 +128,18 @@ export const useVoiceAgent = () => {
             if (text) {
               // Determine role from message properties
               let role: "user" | "agent" = "user";
-              
-              if (message.role === "agent" || message.role === "assistant" || 
-                  message.source === "agent" || message.source === "assistant" ||
-                  message.type === "agent_transcript" || message.type === "response_transcript" ||
-                  message.type === "assistant_transcript" || message.speaker === "agent" ||
-                  message.speaker === "assistant") {
+
+              if (message.role === "agent" || message.role === "assistant" ||
+                message.source === "agent" || message.source === "assistant" ||
+                message.type === "agent_transcript" || message.type === "response_transcript" ||
+                message.type === "assistant_transcript" || message.speaker === "agent" ||
+                message.speaker === "assistant") {
                 role = "agent";
               } else if (message.role === "user" || message.source === "user" ||
-                         message.type === "user_transcript" || message.speaker === "user") {
+                message.type === "user_transcript" || message.speaker === "user") {
                 role = "user";
               }
-              
+
               setTranscripts((prev) => [
                 ...prev,
                 { role, text, timestamp: new Date() },
@@ -151,6 +159,10 @@ export const useVoiceAgent = () => {
 
       ws.onclose = () => {
         console.log("WebSocket closed");
+        if (backToListeningTimeoutRef.current) {
+          clearTimeout(backToListeningTimeoutRef.current);
+          backToListeningTimeoutRef.current = null;
+        }
         if (status !== "idle") {
           setStatus("idle");
         }
@@ -164,6 +176,10 @@ export const useVoiceAgent = () => {
 
   const disconnect = useCallback(() => {
     console.log("Disconnecting...");
+    if (backToListeningTimeoutRef.current) {
+      clearTimeout(backToListeningTimeoutRef.current);
+      backToListeningTimeoutRef.current = null;
+    }
 
     // Stop recording
     if (recorderRef.current) {
