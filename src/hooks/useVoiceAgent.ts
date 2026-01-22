@@ -163,9 +163,7 @@ export const useVoiceAgent = () => {
           clearTimeout(backToListeningTimeoutRef.current);
           backToListeningTimeoutRef.current = null;
         }
-        if (status !== "idle") {
-          setStatus("idle");
-        }
+        setStatus("idle");
       };
     } catch (err) {
       console.error("Failed to start session:", err);
