@@ -39,3 +39,19 @@ npm run build
 npm run preview
 ```
 
+## Docker (production)
+
+Build the image (from the project root where `Dockerfile` is):
+
+```bash
+docker build -t websocket-app .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8080:80 websocket-app
+```
+
+Open `http://localhost:8080`.
+
